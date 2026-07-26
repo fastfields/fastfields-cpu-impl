@@ -36,13 +36,12 @@ jobs:
         run: |
           cd cpu-lib/impl
           git fetch --depth 1 origin "$IMPL_SHA"
-          git checkout --detach "$IMPL_SHA"
-          # Re-point + repopulate the nested kernels sub-submodule to whatever
-          # this commit pins (checkout above does not touch its working tree).
-          git submodule sync --recursive
-          git submodule update --init --recursive --force
-          git log -1 --oneline
-          test -f kernels/cuda_switch.h  # fail loudly if kernels is missing
+          # Overlay this commit's tracked files onto the working tree without
+          # moving HEAD or touching the already-populated nested `kernels`
+          # submodule (a `git checkout --detach` + submodule update de-populates
+          # kernels; a pathspec checkout leaves the submodule boundary alone).
+          git checkout "$IMPL_SHA" -- .
+          test -f kernels/cuda_switch.h  # kernels must still be present
 
       - name: Install build toolchain
         run: sudo apt-get update && sudo apt-get install -y clang
