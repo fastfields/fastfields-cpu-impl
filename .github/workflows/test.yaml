@@ -1,0 +1,47 @@
+name: Test
+
+# fastfields-cpu-impl is header-only, so it cannot build or test on its own.
+# This workflow validates a change by building the fastfields-cpu-lib test
+# suite (the project's primary correctness gate) with THIS repo's commit
+# pinned as cpu-lib's `impl` submodule -- so a regression in the impl loops
+# fails here rather than only surfacing downstream.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-via-cpu-lib:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out fastfields-cpu-lib (recursive)
+        uses: actions/checkout@v5
+        with:
+          repository: fastfields/fastfields-cpu-lib
+          ref: main
+          submodules: recursive
+          token: ${{ secrets.CI_SUBMODULE_TOKEN }}
+          path: cpu-lib
+
+      - name: Pin the impl submodule to this commit
+        # cpu-lib -> impl (this repo) -> kernels. Check out the commit under
+        # test, then re-sync its nested `kernels` sub-submodule to whatever
+        # this commit pins.
+        env:
+          IMPL_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          cd cpu-lib/impl
+          git fetch --depth 1 origin "$IMPL_SHA"
+          git checkout --detach "$IMPL_SHA"
+          git submodule update --init --recursive
+          git log -1 --oneline
+
+      - name: Install build toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      - name: Build and run the cpu-lib test suite
+        run: make -j2 -C cpu-lib test CXX=clang++
