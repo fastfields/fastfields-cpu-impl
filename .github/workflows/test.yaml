@@ -3,8 +3,9 @@ name: Test
 # fastfields-cpu-impl is header-only, so it cannot build or test on its own.
 # This workflow validates a change by building the fastfields-cpu-lib test
 # suite (the project's primary correctness gate) with THIS repo's commit
-# pinned as cpu-lib's `impl` submodule -- so a regression in the impl loops
-# fails here rather than only surfacing downstream.
+# (and its own pinned kernels) checked out as cpu-lib's `impl` -- so a
+# regression in the impl loops fails here rather than only surfacing
+# downstream.
 
 on:
   push:
@@ -18,37 +19,29 @@ jobs:
   test-via-cpu-lib:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out fastfields-cpu-lib (recursive)
+      # cpu-lib provides the Makefile + tests. Check it out WITHOUT submodules
+      # so its `impl` slot is empty and we can drop this repo in there.
+      - name: Check out fastfields-cpu-lib
         uses: actions/checkout@v5
         with:
           repository: fastfields/fastfields-cpu-lib
           ref: main
-          submodules: recursive
-          token: ${{ secrets.CI_SUBMODULE_TOKEN }}
+          submodules: false
           path: cpu-lib
 
-      - name: Pin the impl submodule to this commit
-        # cpu-lib -> impl (this repo) -> kernels. Check out the commit under
-        # test, then re-sync its nested `kernels` sub-submodule to whatever
-        # this commit pins.
-        env:
-          IMPL_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          cd cpu-lib/impl
-          git fetch --depth 1 origin "$IMPL_SHA"
-          # Overlay this commit's tracked files (headers + .gitmodules) without
-          # moving HEAD.
-          git checkout "$IMPL_SHA" -- .
-          # The recursive checkout of cpu-lib does NOT populate the nested
-          # kernels submodule, so fetch + check out exactly the commit this
-          # impl commit pins (same approach as the fastfields-kernels CI).
-          KERNELS_SHA="$(git rev-parse "$IMPL_SHA:kernels")"
-          git -C kernels fetch --depth 1 origin "$KERNELS_SHA"
-          git -C kernels checkout --detach "$KERNELS_SHA"
-          test -f kernels/cuda_switch.h  # kernels must be present
+      # Check out THIS repo at the commit under test, recursively (so its
+      # `kernels` submodule is populated), directly into cpu-lib's impl slot.
+      - name: Check out this repo (+ kernels) as cpu-lib/impl
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          token: ${{ secrets.CI_SUBMODULE_TOKEN }}
+          path: cpu-lib/impl
 
       - name: Install build toolchain
         run: sudo apt-get update && sudo apt-get install -y clang
 
       - name: Build and run the cpu-lib test suite
-        run: make -j2 -C cpu-lib test CXX=clang++
+        run: |
+          test -f cpu-lib/impl/kernels/cuda_switch.h  # sanity: kernels present
+          make -j2 -C cpu-lib test CXX=clang++
