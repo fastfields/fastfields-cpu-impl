@@ -370,33 +370,65 @@ void relax_membrane_(
     offset_t osc    = stride_sol[nall];
     offset_t hsc    = stride_hes[nall];
     offset_t gsc    = stride_grd[nall];
-    offset_t numel  = prod(size, nall);    // no outer loop across channels
 
     reduce_t kernel[Impl::kernelsize_membrane];
     Impl::make_kernel_membrane(kernel, absolute, membrane, voxel_size);
     constexpr int DD = posdef::utils<posdef::type::Sym, offset_t, ndim>::work_size;
+
+    // Gauss-Seidel / patch-coloring relax, same math as before, but the
+    // per-voxel offset now comes from peeling (*batch,*spatial) cells
+    // instead of index2offset_v2: peel sol/hes/grd per batch cell (rank
+    // nbatch+ndim carriers, no trailing channel needed -- only the batch
+    // origin pointer matters here), caching across the inner loop like the
+    // matvec/diag stencils above, then fold the spatial offset by hand.
+    auto as = tny::as_anyrank(sol, size, stride_sol, static_cast<int>(nall), tny::copy_meta);
+    auto ah = tny::as_anyrank(hes, size, stride_hes, static_cast<int>(nall), tny::copy_meta);
+    auto ag = tny::as_anyrank(grd, size, stride_grd, static_cast<int>(nall), tny::copy_meta);
+
+    offset_t osp[ndim]; offset_t nsp = 1;
+    for (int d = 0; d < ndim; ++d) { osp[d] = size[nbatch + d]; nsp *= osp[d]; }
+    const offset_t numel = as.template size_front<-ndim>() * nsp;    // no outer loop across channels
 
     for (offset_t n=0; n<2*niter; ++n) {
     parallel_for(0, numel, GRAIN_SIZE, [&](long start, long end) {
         offset_t loc[ndim];
         scalar_t val[ndim], diag[ndim];
         reduce_t buf[DD ? DD : 1];
+        offset_t cur_b = (nsp > 0) ? static_cast<offset_t>(start) / nsp : 0;
+        auto vs = as.template peel_front_at<-ndim>(cur_b);
+        auto vh = ah.template peel_front_at<-ndim>(cur_b);
+        auto vg = ag.template peel_front_at<-ndim>(cur_b);
         for (offset_t i=start; i < end; ++i)
         {
-            offset_t sol_offset = index2offset_v2<ndim>(i, nall, size, stride_sol, loc);
+            const offset_t b = (nsp > 0) ? i / nsp : 0;
+            if (b != cur_b) {
+                vs = as.template peel_front_at<-ndim>(b);
+                vh = ah.template peel_front_at<-ndim>(b);
+                vg = ag.template peel_front_at<-ndim>(b);
+                cur_b = b;
+            }
+            offset_t sp = i - b * nsp, sol_offset = 0, hes_offset = 0, grd_offset = 0;
+            for (int d = ndim - 1; d >= 0; --d) {
+                const offset_t c = sp % osp[d]; sp /= osp[d]; loc[d] = c;
+                sol_offset += c * stride_sol[nbatch + d];
+                hes_offset += c * stride_hes[nbatch + d];
+                grd_offset += c * stride_grd[nbatch + d];
+            }
             if (!patch1<ndim>(loc, n))
                 continue;
-            offset_t grd_offset = index2offset(i, nall, size, stride_grd);
-            offset_t hes_offset = index2offset(i, nall, size, stride_hes);
+
+            scalar_t       * sol_ptr = vs.data() + sol_offset;
+            const scalar_t * hes_ptr = vh.data() + hes_offset;
+            const scalar_t * grd_ptr = vg.data() + grd_offset;
 
             // gradient
 #           pragma unroll
             for (int d=0; d<ndim; ++d)
-                val[d] = grd[grd_offset + gsc*d];
+                val[d] = grd_ptr[gsc*d];
 
             // minus convolution
             Impl::template matvec_membrane<isub>(
-                val, sol + sol_offset,
+                val, sol_ptr,
                 loc, size + nbatch, stride_sol + nbatch,
                 static_cast<offset_t>(1), osc, kernel);
 
@@ -406,8 +438,8 @@ void relax_membrane_(
 
             // sol += (hes + diag) \ (grad - conv(sol))
             PosDef::relax_(
-                Strided(sol + sol_offset, osc),
-                StridedConst(hes + hes_offset, hsc),
+                Strided(sol_ptr, osc),
+                StridedConst(hes_ptr, hsc),
                 val, diag, buf, static_cast<reduce_t>(0)
             );
         }
