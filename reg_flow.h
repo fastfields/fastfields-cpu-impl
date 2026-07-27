@@ -105,20 +105,22 @@ void kernel_absolute(
     reduce_t voxel_size [ndim];   fillfrom<ndim>(voxel_size, _voxel_size);
     offset_t nall   = nbatch + ndim;
     offset_t sc     = stride[nall];
-    offset_t numel  = prod(size, nbatch);  // loop across batch only
 
     reduce_t kernel[Impl::kernelsize_absolute];
     Impl::make_kernel_absolute(kernel, absolute, voxel_size);
 
     offset_t offset = center_offset<ndim>(size+nbatch, stride+nbatch);
 
-    parallel_for(0, numel, GRAIN_SIZE, [&](long start, long end) {
+    // batch-only: peel each (*batch,*spatial) cell to its batch origin, write
+    // the kernel at the spatial center (no per-voxel spatial decode needed).
+    auto ao = tny::as_anyrank(out, size, stride, static_cast<int>(nall), tny::copy_meta);
+    const offset_t nbcell = ao.template size_front<-ndim>();
+
+    parallel_for(0, nbcell, GRAIN_SIZE, [&](long start, long end) {
     for (offset_t i=start; i < end; ++i)
     {
-        offset_t out_offset = index2offset(i, nbatch, size, stride);
-        out_offset += offset;
-
-        Impl::template kernel_absolute<op_apply<op, scalar_t, reduce_t> >(out + out_offset, sc, kernel);
+        auto vo = ao.template peel_front_at<-ndim>(i);
+        Impl::template kernel_absolute<op_apply<op, scalar_t, reduce_t> >(vo.data() + offset, sc, kernel);
     }});
 }
 
@@ -256,21 +258,24 @@ void kernel_membrane(
     reduce_t voxel_size[ndim];    fillfrom<ndim>(voxel_size, _voxel_size);
     offset_t nall   = nbatch + ndim;
     offset_t sc     = stride[nall];
-    offset_t numel  = prod(size, nbatch);
 
     reduce_t kernel[Impl::kernelsize_membrane];
     Impl::make_fullkernel_membrane(kernel, absolute, membrane, voxel_size);
 
     offset_t offset = center_offset<ndim>(size + nbatch, stride + nbatch);
 
-    parallel_for(0, numel, GRAIN_SIZE, [&](long start, long end) {
+    // batch-only: peel each (*batch,*spatial) cell to its batch origin, write
+    // the full kernel at the spatial center.
+    auto ao = tny::as_anyrank(out, size, stride, static_cast<int>(nall), tny::copy_meta);
+    const offset_t nbcell = ao.template size_front<-ndim>();
+
+    parallel_for(0, nbcell, GRAIN_SIZE, [&](long start, long end) {
         for (offset_t i=start; i < end; ++i)
         {
-            offset_t out_offset = index2offset(i, nbatch, size, stride);
-            out_offset += offset;
+            auto vo = ao.template peel_front_at<-ndim>(i);
 
             Impl::template kernel_membrane<op_apply<op, scalar_t, reduce_t> >(
-                out + out_offset, sc, stride + nbatch, kernel);
+                vo.data() + offset, sc, stride + nbatch, kernel);
         }
     });
 }
@@ -504,21 +509,24 @@ void kernel_bending(
     reduce_t voxel_size[ndim];    fillfrom<ndim>(voxel_size, _voxel_size);
     offset_t nall = nbatch + ndim;
     offset_t sc = stride[nall];
-    offset_t numel = prod(size, nbatch);
 
     reduce_t kernel[Impl::kernelsize_bending];
     Impl::make_fullkernel_bending(kernel, absolute, membrane, bending, voxel_size);
 
     offset_t offset = center_offset<ndim>(size + nbatch, stride + nbatch);
 
-    parallel_for(0, numel, GRAIN_SIZE, [&](long start, long end) {
+    // batch-only: peel each (*batch,*spatial) cell to its batch origin, write
+    // the full kernel at the spatial center.
+    auto ao = tny::as_anyrank(out, size, stride, static_cast<int>(nall), tny::copy_meta);
+    const offset_t nbcell = ao.template size_front<-ndim>();
+
+    parallel_for(0, nbcell, GRAIN_SIZE, [&](long start, long end) {
         for (offset_t i=start; i < end; ++i)
         {
-            offset_t out_offset = index2offset(i, nbatch, size, stride);
-            out_offset += offset;
+            auto vo = ao.template peel_front_at<-ndim>(i);
 
             Impl::template kernel_bending<op_apply<op, scalar_t, reduce_t> >(
-                out + out_offset, sc, stride + nbatch, kernel);
+                vo.data() + offset, sc, stride + nbatch, kernel);
         }
     });
 }
