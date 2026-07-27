@@ -373,8 +373,8 @@ void relax_membrane_(
     for (offset_t n=0; n<2*niter; ++n) {
     parallel_for(0, numel, GRAIN_SIZE, [&](long start, long end) {
         offset_t loc[ndim];
-        scalar_t * val  = new reduce_t[nc];
-        scalar_t * diag = new reduce_t[nc];
+        scalar_t * val  = new scalar_t[nc];
+        scalar_t * diag = new scalar_t[nc];
         reduce_t * buf  = ncc ? new reduce_t[ncc] : nullptr;
         for (offset_t i=start; i < end; ++i)
         {
