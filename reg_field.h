@@ -674,12 +674,7 @@ void matvec_absolute_rls(
     offset_t nall   = nbatch + ndim;
     offset_t osc    = stride_out[nall];
     offset_t isc    = stride_inp[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);  // no outer loop across channels
 
@@ -726,12 +721,7 @@ void diag_absolute_rls(
 
     offset_t nall   = nbatch + ndim;
     offset_t osc    = stride_out[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);    // no outer loop across channels
 
@@ -785,12 +775,7 @@ void relax_absolute_rls_(
     offset_t osc    = stride_sol[nall];
     offset_t hsc    = stride_hes[nall];
     offset_t gsc    = stride_grd[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc    = size[nall];
     offset_t numel  = prod(size, nall);    // no outer loop across channels
 
@@ -1058,12 +1043,7 @@ void matvec_membrane_rls(
     offset_t nall   = nbatch + ndim;
     offset_t osc    = stride_out[nall];
     offset_t isc    = stride_inp[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);  // no outer loop across channels
 
@@ -1116,12 +1096,7 @@ void diag_membrane_rls(
     reduce_t voxel_size[ndim];    fillfrom<ndim>(voxel_size, _voxel_size);
     offset_t nall   = nbatch + ndim;
     offset_t osc    = stride_out[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);    // no outer loop across channels
 
@@ -1181,12 +1156,7 @@ void relax_membrane_rls_(
     offset_t osc    = stride_sol[nall];
     offset_t hsc    = stride_hes[nall];
     offset_t gsc    = stride_grd[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);    // no outer loop across channels
 
@@ -1482,12 +1452,7 @@ void matvec_bending_rls(
     offset_t nall   = nbatch + ndim;
     offset_t osc    = stride_out[nall];
     offset_t isc    = stride_inp[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);  // no outer loop across channels
 
@@ -1541,12 +1506,7 @@ void diag_bending_rls(
     reduce_t voxel_size[ndim];    fillfrom<ndim>(voxel_size, _voxel_size);
     offset_t nall   = nbatch + ndim;
     offset_t osc    = stride_out[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);    // no outer loop across channels
 
@@ -1607,12 +1567,7 @@ void relax_bending_rls_(
     offset_t osc    = stride_sol[nall];
     offset_t hsc    = stride_hes[nall];
     offset_t gsc    = stride_grd[nall];
-    // RLS: wgt has wc=1 (a single weight broadcast across all `nc` field
-    // channels), so the per-channel stride must be forced to 0 -- using the
-    // tensor's real (size-1) last-dim stride here indexes wgt[stride*c] for
-    // c>0, walking off the wc=1 buffer into the next voxel's weight (or OOB
-    // at the last voxel). See fastfields-cpu-lib#62.
-    offset_t wsc    = 0;
+    offset_t wsc    = stride_wgt[nall];
     offset_t nc     = size[nall];
     offset_t numel  = prod(size, nall);    // no outer loop across channels
 
